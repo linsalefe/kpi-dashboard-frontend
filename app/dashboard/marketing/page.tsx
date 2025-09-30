@@ -1,248 +1,239 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
-import { KPICard } from '@/components/charts/KPICard';
 import api from '@/lib/api';
 import { formatCurrency, formatNumber, formatDate } from '@/lib/utils';
-import type { MarketingData, MarketingStats } from '@/types';
+import { MarketingData } from '@/types/marketing';
+import { useSocket } from '@/hooks/useSocket';
+import { TrendingUp, Users, DollarSign, MousePointerClick, Wifi, WifiOff } from 'lucide-react';
+import Link from 'next/link';
+import { KPICard } from '@/components/charts/KPICard';
 
-export default function MarketingPage() {
+interface KPIStats {
+  roi: number;
+  cpl: number;
+  taxa_conversao: number;
+  ctr: number;
+}
+
+export default function MarketingDashboard() {
+  const [stats, setStats] = useState<KPIStats>({ roi: 0, cpl: 0, taxa_conversao: 0, ctr: 0 });
+  const [data, setData] = useState<MarketingData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState('30');
   const { toast } = useToast();
   
-  const [data, setData] = useState<MarketingData[]>([]);
-  const [stats, setStats] = useState<MarketingStats | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [dataInicio, setDataInicio] = useState('');
-  const [dataFim, setDataFim] = useState('');
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const perPage = 10;
+  // Socket.io Real-time
+  const { isConnected, lastUpdate, subscribeSector } = useSocket();
 
+  // Carregar dados iniciais
   const fetchData = async () => {
     try {
-      setIsLoading(true);
-      const params: any = {
-        page,
-        per_page: perPage,
-        sort_by: 'data_ref',
-        sort_order: 'desc',
-      };
-      if (dataInicio) params.data_inicio = dataInicio;
-      if (dataFim) params.data_fim = dataFim;
-      const response = await api.get('/marketing/data', { params });
-      setData(response.data.items || []);
-      setTotalPages(response.data.total_pages || 1);
-    } catch (error: any) {
-      console.error('Erro ao buscar dados:', error);
-      setData([]);
+      setLoading(true);
+      
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - parseInt(period));
+
+      const [statsRes, dataRes] = await Promise.all([
+        api.get('/marketing/stats', {
+          params: {
+            data_inicio: startDate.toISOString().split('T')[0],
+            data_fim: endDate.toISOString().split('T')[0],
+          },
+        }),
+        api.get('/marketing/data', {
+          params: {
+            data_inicio: startDate.toISOString().split('T')[0],
+            data_fim: endDate.toISOString().split('T')[0],
+            page: 1,
+            per_page: 10,
+          },
+        }),
+      ]);
+
+      if (statsRes.data.metricas) {
+        setStats({
+          roi: statsRes.data.metricas.roi_percentual,
+          cpl: statsRes.data.metricas.cpl,
+          taxa_conversao: statsRes.data.metricas.taxa_conversao_percentual,
+          ctr: statsRes.data.metricas.ctr_percentual,
+        });
+      }
+
+      if (dataRes.data.data) {
+        setData(dataRes.data.data);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error);
       toast({
         title: 'Erro',
-        description: error?.detail || 'Erro ao buscar dados de Marketing',
+        description: 'Não foi possível carregar os dados',
         variant: 'destructive',
       });
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const fetchStats = async () => {
-    try {
-      const params: any = {};
-      if (dataInicio) params.data_inicio = dataInicio;
-      if (dataFim) params.data_fim = dataFim;
-      const response = await api.get('/marketing/stats', { params });
-      setStats(response.data);
-    } catch (error: any) {
-      console.error('Erro ao buscar estatísticas:', error);
+  // Inscrever no setor Marketing ao montar
+  useEffect(() => {
+    if (isConnected) {
+      subscribeSector('marketing');
     }
-  };
+  }, [isConnected, subscribeSector]);
 
-  const aplicarFiltros = () => {
-    setPage(1);
-    fetchData();
-    fetchStats();
-  };
-
-  const limparFiltros = () => {
-    setDataInicio('');
-    setDataFim('');
-    setPage(1);
-  };
-
+  // Escutar atualizações em tempo real
   useEffect(() => {
-    fetchData();
-    fetchStats();
-  }, []);
+    if (lastUpdate && lastUpdate.sector === 'marketing') {
+      console.log('Atualizando KPIs em tempo real:', lastUpdate.kpis);
+      
+      setStats(lastUpdate.kpis);
+      
+      toast({
+        title: '📊 KPIs Atualizados',
+        description: 'Dados atualizados em tempo real',
+      });
 
-  useEffect(() => {
-    if (page > 1) {
+      // Recarregar tabela de dados
       fetchData();
     }
-  }, [page]);
+  }, [lastUpdate]);
 
-  const getStatusROI = (roi: number | undefined) => {
-    if (!roi || roi === 0) return undefined;
-    if (roi >= 10) return 'excelente';
-    if (roi >= 5) return 'bom';
-    if (roi >= 2) return 'atencao';
-    return 'critico';
-  };
+  // Carregar dados ao montar e quando período muda
+  useEffect(() => {
+    fetchData();
+  }, [period]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-lg">Carregando...</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
+    <div className="p-6 space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold">Marketing</h1>
-          <p className="text-muted-foreground">Gestão de campanhas e análise de performance</p>
+          <p className="text-muted-foreground">Análise de campanhas e performance</p>
         </div>
-        <Link href="/dashboard/marketing/form">
-          <Button>+ Nova Campanha</Button>
-        </Link>
+        <div className="flex items-center gap-4">
+          {/* Indicador de Conexão Real-Time */}
+          <Badge variant={isConnected ? 'default' : 'secondary'} className="gap-2">
+            {isConnected ? (
+              <>
+                <Wifi className="h-3 w-3" />
+                Conectado
+              </>
+            ) : (
+              <>
+                <WifiOff className="h-3 w-3" />
+                Desconectado
+              </>
+            )}
+          </Badge>
+          
+          <Select value={period} onValueChange={setPeriod}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="7">Últimos 7 dias</SelectItem>
+              <SelectItem value="30">Últimos 30 dias</SelectItem>
+              <SelectItem value="90">Últimos 90 dias</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          <Link href="/dashboard/marketing/form">
+            <Button>Nova Campanha</Button>
+          </Link>
+        </div>
       </div>
 
+      {/* KPIs */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <KPICard
+          title="ROI"
+          value={formatNumber(stats.roi)}
+          subtitle="%"
+          icon={TrendingUp}
+          trend={stats.roi > 0 ? 'up' : 'down'}
+        />
+        <KPICard
+          title="CPL"
+          value={formatCurrency(stats.cpl)}
+          subtitle="Custo por Lead"
+          icon={DollarSign}
+          trend={stats.cpl < 50 ? 'up' : 'down'}
+        />
+        <KPICard
+          title="Taxa de Conversão"
+          value={formatNumber(stats.taxa_conversao)}
+          subtitle="%"
+          icon={Users}
+          trend={stats.taxa_conversao > 2 ? 'up' : 'down'}
+        />
+        <KPICard
+          title="CTR"
+          value={formatNumber(stats.ctr)}
+          subtitle="%"
+          icon={MousePointerClick}
+          trend={stats.ctr > 1 ? 'up' : 'down'}
+        />
+      </div>
+
+      {/* Tabela de Dados */}
       <Card>
         <CardHeader>
-          <CardTitle>Filtros</CardTitle>
+          <CardTitle>Últimas Campanhas</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <Label htmlFor="data_inicio">Data Início</Label>
-              <Input id="data_inicio" type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} />
-            </div>
-            <div>
-              <Label htmlFor="data_fim">Data Fim</Label>
-              <Input id="data_fim" type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} />
-            </div>
-            <div className="flex items-end gap-2">
-              <Button onClick={aplicarFiltros}>Aplicar</Button>
-              <Button variant="outline" onClick={limparFiltros}>Limpar</Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICard 
-          titulo="ROI" 
-          valor={stats?.kpis?.roi || 0} 
-          formato="percentual_direto" 
-          decimais={1} 
-          icone="💰" 
-          status={getStatusROI(stats?.kpis?.roi)} 
-          isLoading={!stats} 
-        />
-        <KPICard 
-          titulo="CPL (Custo por Lead)" 
-          valor={stats?.kpis?.cpl || 0} 
-          formato="moeda" 
-          decimais={2} 
-          icone="📊" 
-          isLoading={!stats} 
-        />
-        <KPICard 
-          titulo="Taxa de Conversão" 
-          valor={stats?.kpis?.taxa_conversao || 0} 
-          formato="percentual_direto" 
-          decimais={2} 
-          icone="🎯" 
-          isLoading={!stats} 
-        />
-        <KPICard 
-          titulo="CTR (Click-Through Rate)" 
-          valor={stats?.kpis?.ctr || 0} 
-          formato="percentual_direto" 
-          decimais={2} 
-          icone="👆" 
-          isLoading={!stats} 
-        />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Investido</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats ? formatCurrency(stats.total_investimento) : '...'}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total de Leads</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats ? formatNumber(stats.total_leads) : '...'}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Receita Gerada</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats ? formatCurrency(stats.total_receita) : '...'}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Dados de Campanhas</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="text-center py-8">Carregando...</div>
-          ) : !data || data.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">Nenhum dado encontrado. Cadastre a primeira campanha!</div>
-          ) : (
-            <>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Data</TableHead>
-                      <TableHead>Canal</TableHead>
-                      <TableHead>Campanha</TableHead>
-                      <TableHead className="text-right">Investimento</TableHead>
-                      <TableHead className="text-right">Leads</TableHead>
-                      <TableHead className="text-right">Conversões</TableHead>
-                      <TableHead className="text-right">Receita</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell>{formatDate(item.data_ref)}</TableCell>
-                        <TableCell><Badge variant="outline">{item.canal}</Badge></TableCell>
-                        <TableCell className="font-medium">{item.campanha}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(item.investimento)}</TableCell>
-                        <TableCell className="text-right">{formatNumber(item.leads_gerados)}</TableCell>
-                        <TableCell className="text-right">{formatNumber(item.conversoes)}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(item.receita_gerada)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4">
-                  <div className="text-sm text-muted-foreground">Página {page} de {totalPages}</div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1}>Anterior</Button>
-                    <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages}>Próxima</Button>
-                  </div>
-                </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Data</TableHead>
+                <TableHead>Canal</TableHead>
+                <TableHead>Campanha</TableHead>
+                <TableHead className="text-right">Investimento</TableHead>
+                <TableHead className="text-right">Leads</TableHead>
+                <TableHead className="text-right">Conversões</TableHead>
+                <TableHead className="text-right">Receita</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center text-muted-foreground">
+                    Nenhum dado encontrado
+                  </TableCell>
+                </TableRow>
+              ) : (
+                data.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell>{formatDate(item.data_ref)}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{item.canal}</Badge>
+                    </TableCell>
+                    <TableCell>{item.campanha}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(item.investimento)}</TableCell>
+                    <TableCell className="text-right">{item.leads}</TableCell>
+                    <TableCell className="text-right">{item.conversoes}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(item.receita)}</TableCell>
+                  </TableRow>
+                ))
               )}
-            </>
-          )}
+            </TableBody>
+          </Table>
         </CardContent>
       </Card>
     </div>
