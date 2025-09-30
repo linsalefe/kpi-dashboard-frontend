@@ -1,11 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  
-  // Habilitar App Router
-  experimental: {
-    serverActions: true,
-  },
 
   // Variáveis de ambiente públicas
   env: {
