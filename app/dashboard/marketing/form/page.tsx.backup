@@ -1,0 +1,338 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import api from "@/lib/api";
+import {
+  Calendar,
+  DollarSign,
+  Users,
+  MousePointerClick,
+  Eye,
+  ShoppingCart,
+  TrendingUp,
+  Tag,
+  ArrowLeft,
+  Save,
+  Loader2,
+} from "lucide-react";
+import Link from "next/link";
+
+export default function MarketingFormPage() {
+  const router = useRouter();
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
+
+  const [formData, setFormData] = useState({
+    data_ref: new Date().toISOString().split("T")[0],
+    canal: "",
+    campanha: "",
+    investimento: "",
+    impressoes: "",
+    cliques: "",
+    leads: "",
+    conversoes: "",
+    receita: "",
+  });
+
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const handleChange = (field: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    if (errors[field]) {
+      setErrors((prev) => ({ ...prev, [field]: "" }));
+    }
+  };
+
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+
+    if (!formData.data_ref) newErrors.data_ref = "Data é obrigatória";
+    if (!formData.canal) newErrors.canal = "Canal é obrigatório";
+    if (!formData.campanha) newErrors.campanha = "Nome da campanha é obrigatório";
+    if (!formData.investimento || parseFloat(formData.investimento) <= 0) {
+      newErrors.investimento = "Investimento deve ser maior que zero";
+    }
+    if (!formData.impressoes || parseInt(formData.impressoes) < 0) {
+      newErrors.impressoes = "Impressões inválidas";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!validateForm()) {
+      toast({
+        title: "Erro de validação",
+        description: "Corrija os campos destacados",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await api.post("/marketing/", {
+        data_ref: formData.data_ref,
+        canal: formData.canal,
+        campanha: formData.campanha,
+        investimento: parseFloat(formData.investimento),
+        impressoes: parseInt(formData.impressoes) || 0,
+        cliques: parseInt(formData.cliques) || 0,
+        leads: parseInt(formData.leads) || 0,
+        conversoes: parseInt(formData.conversoes) || 0,
+        receita: parseFloat(formData.receita) || 0,
+      });
+
+      toast({
+        title: "Sucesso!",
+        description: "Campanha cadastrada com sucesso",
+      });
+
+      router.push("/dashboard/marketing");
+    } catch (err: any) {
+      toast({
+        title: "Erro ao salvar",
+        description: err.detail || "Erro ao cadastrar campanha",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6 animate-fade-in max-w-5xl">
+      {/* Header */}
+      <div className="flex items-center gap-4">
+        <Link href="/dashboard/marketing">
+          <Button variant="outline" size="icon" className="h-10 w-10">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+        </Link>
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Nova Campanha</h1>
+          <p className="text-gray-500 mt-1">
+            Cadastre os dados da campanha de marketing
+          </p>
+        </div>
+      </div>
+
+      {/* Formulário */}
+      <form onSubmit={handleSubmit}>
+        <Card className="border-gray-200/50">
+          <CardHeader className="border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">
+            <CardTitle className="text-lg font-semibold flex items-center gap-2">
+              <Tag className="w-5 h-5 text-cenat-secondary" />
+              Informações da Campanha
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Data de Referência */}
+              <div className="space-y-2">
+                <Label htmlFor="data_ref" className="flex items-center gap-2 text-sm font-semibold">
+                  <Calendar className="w-4 h-4 text-gray-500" />
+                  Data de Referência *
+                </Label>
+                <Input
+                  id="data_ref"
+                  type="date"
+                  value={formData.data_ref}
+                  onChange={(e) => handleChange("data_ref", e.target.value)}
+                  className={errors.data_ref ? "border-red-500" : ""}
+                />
+                {errors.data_ref && (
+                  <p className="text-xs text-red-600">{errors.data_ref}</p>
+                )}
+              </div>
+
+              {/* Canal */}
+              <div className="space-y-2">
+                <Label htmlFor="canal" className="flex items-center gap-2 text-sm font-semibold">
+                  <TrendingUp className="w-4 h-4 text-gray-500" />
+                  Canal *
+                </Label>
+                <Select
+                  value={formData.canal}
+                  onValueChange={(value) => handleChange("canal", value)}
+                >
+                  <SelectTrigger className={errors.canal ? "border-red-500" : ""}>
+                    <SelectValue placeholder="Selecione o canal" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Google Ads">Google Ads</SelectItem>
+                    <SelectItem value="Facebook Ads">Facebook Ads</SelectItem>
+                    <SelectItem value="Instagram Ads">Instagram Ads</SelectItem>
+                    <SelectItem value="LinkedIn Ads">LinkedIn Ads</SelectItem>
+                    <SelectItem value="TikTok Ads">TikTok Ads</SelectItem>
+                    <SelectItem value="Email Marketing">Email Marketing</SelectItem>
+                    <SelectItem value="Orgânico">Orgânico</SelectItem>
+                    <SelectItem value="Outros">Outros</SelectItem>
+                  </SelectContent>
+                </Select>
+                {errors.canal && (
+                  <p className="text-xs text-red-600">{errors.canal}</p>
+                )}
+              </div>
+
+              {/* Nome da Campanha */}
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="campanha" className="flex items-center gap-2 text-sm font-semibold">
+                  <Tag className="w-4 h-4 text-gray-500" />
+                  Nome da Campanha *
+                </Label>
+                <Input
+                  id="campanha"
+                  placeholder="Ex: Black Friday 2025"
+                  value={formData.campanha}
+                  onChange={(e) => handleChange("campanha", e.target.value)}
+                  className={errors.campanha ? "border-red-500" : ""}
+                />
+                {errors.campanha && (
+                  <p className="text-xs text-red-600">{errors.campanha}</p>
+                )}
+              </div>
+
+              {/* Investimento */}
+              <div className="space-y-2">
+                <Label htmlFor="investimento" className="flex items-center gap-2 text-sm font-semibold">
+                  <DollarSign className="w-4 h-4 text-gray-500" />
+                  Investimento (R$) *
+                </Label>
+                <Input
+                  id="investimento"
+                  type="number"
+                  step="0.01"
+                  placeholder="0,00"
+                  value={formData.investimento}
+                  onChange={(e) => handleChange("investimento", e.target.value)}
+                  className={errors.investimento ? "border-red-500" : ""}
+                />
+                {errors.investimento && (
+                  <p className="text-xs text-red-600">{errors.investimento}</p>
+                )}
+              </div>
+
+              {/* Impressões */}
+              <div className="space-y-2">
+                <Label htmlFor="impressoes" className="flex items-center gap-2 text-sm font-semibold">
+                  <Eye className="w-4 h-4 text-gray-500" />
+                  Impressões
+                </Label>
+                <Input
+                  id="impressoes"
+                  type="number"
+                  placeholder="0"
+                  value={formData.impressoes}
+                  onChange={(e) => handleChange("impressoes", e.target.value)}
+                  className={errors.impressoes ? "border-red-500" : ""}
+                />
+                {errors.impressoes && (
+                  <p className="text-xs text-red-600">{errors.impressoes}</p>
+                )}
+              </div>
+
+              {/* Cliques */}
+              <div className="space-y-2">
+                <Label htmlFor="cliques" className="flex items-center gap-2 text-sm font-semibold">
+                  <MousePointerClick className="w-4 h-4 text-gray-500" />
+                  Cliques
+                </Label>
+                <Input
+                  id="cliques"
+                  type="number"
+                  placeholder="0"
+                  value={formData.cliques}
+                  onChange={(e) => handleChange("cliques", e.target.value)}
+                />
+              </div>
+
+              {/* Leads */}
+              <div className="space-y-2">
+                <Label htmlFor="leads" className="flex items-center gap-2 text-sm font-semibold">
+                  <Users className="w-4 h-4 text-gray-500" />
+                  Leads
+                </Label>
+                <Input
+                  id="leads"
+                  type="number"
+                  placeholder="0"
+                  value={formData.leads}
+                  onChange={(e) => handleChange("leads", e.target.value)}
+                />
+              </div>
+
+              {/* Conversões */}
+              <div className="space-y-2">
+                <Label htmlFor="conversoes" className="flex items-center gap-2 text-sm font-semibold">
+                  <ShoppingCart className="w-4 h-4 text-gray-500" />
+                  Conversões
+                </Label>
+                <Input
+                  id="conversoes"
+                  type="number"
+                  placeholder="0"
+                  value={formData.conversoes}
+                  onChange={(e) => handleChange("conversoes", e.target.value)}
+                />
+              </div>
+
+              {/* Receita */}
+              <div className="space-y-2">
+                <Label htmlFor="receita" className="flex items-center gap-2 text-sm font-semibold">
+                  <DollarSign className="w-4 h-4 text-gray-500" />
+                  Receita (R$)
+                </Label>
+                <Input
+                  id="receita"
+                  type="number"
+                  step="0.01"
+                  placeholder="0,00"
+                  value={formData.receita}
+                  onChange={(e) => handleChange("receita", e.target.value)}
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Botões de Ação */}
+        <div className="flex items-center justify-end gap-3 mt-6">
+          <Link href="/dashboard/marketing">
+            <Button type="button" variant="outline">
+              Cancelar
+            </Button>
+          </Link>
+          <Button
+            type="submit"
+            disabled={loading}
+            className="bg-cenat-secondary hover:bg-cenat-secondary/90 min-w-[140px]"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Salvando...
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4 mr-2" />
+                Salvar Campanha
+              </>
+            )}
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+}

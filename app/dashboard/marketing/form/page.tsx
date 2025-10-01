@@ -1,183 +1,280 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useToast } from '@/components/ui/use-toast';
-import api from '@/lib/api';
-import { CANAIS_MARKETING } from '@/lib/constants';
-import type { MarketingFormData, MarketingFormErrors } from '@/types';
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Calendar, DollarSign, Eye, MousePointerClick, Users, TrendingUp, Package } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import api from "@/lib/api";
+import { ProdutoMarketing, PRODUTOS_OPTIONS } from "@/types/marketing";
 
 export default function MarketingFormPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
 
-  const [formData, setFormData] = useState<MarketingFormData>({
-    data_ref: '',
-    canal: '',
-    campanha: '',
-    investimento: '',
-    leads_gerados: '',
-    conversoes: '',
-    receita_gerada: '',
-    impressoes: '',
-    cliques: '',
+  const [formData, setFormData] = useState({
+    data_ref: "",
+    produto: "",
+    canal: "",
+    campanha: "",
+    investimento: "",
+    impressoes: "",
+    cliques: "",
+    leads: "",
+    vendas: "",
+    receita: "",
   });
-
-  const [errors, setErrors] = useState<MarketingFormErrors>({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleChange = (field: keyof MarketingFormData, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-    if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: undefined }));
-    }
-  };
-
-  const validarFormulario = (): boolean => {
-    const novosErros: MarketingFormErrors = {};
-    if (!formData.data_ref) novosErros.data_ref = 'Data de referência é obrigatória';
-    if (!formData.canal) novosErros.canal = 'Canal é obrigatório';
-    if (!formData.campanha || formData.campanha.trim().length < 3) novosErros.campanha = 'Campanha deve ter pelo menos 3 caracteres';
-    const investimento = parseFloat(formData.investimento);
-    if (!formData.investimento || isNaN(investimento) || investimento < 0) novosErros.investimento = 'Investimento deve ser um valor válido (≥ 0)';
-    const leads = parseInt(formData.leads_gerados);
-    if (!formData.leads_gerados || isNaN(leads) || leads < 0) novosErros.leads_gerados = 'Leads deve ser um número válido (≥ 0)';
-    const conversoes = parseInt(formData.conversoes);
-    if (!formData.conversoes || isNaN(conversoes) || conversoes < 0) novosErros.conversoes = 'Conversões deve ser um número válido (≥ 0)';
-    const receita = parseFloat(formData.receita_gerada);
-    if (!formData.receita_gerada || isNaN(receita) || receita < 0) novosErros.receita_gerada = 'Receita deve ser um valor válido (≥ 0)';
-    const impressoes = parseInt(formData.impressoes);
-    if (!formData.impressoes || isNaN(impressoes) || impressoes < 0) novosErros.impressoes = 'Impressões deve ser um número válido (≥ 0)';
-    const cliques = parseInt(formData.cliques);
-    if (!formData.cliques || isNaN(cliques) || cliques < 0) novosErros.cliques = 'Cliques deve ser um número válido (≥ 0)';
-    if (conversoes > leads && !isNaN(conversoes) && !isNaN(leads)) novosErros.conversoes = 'Conversões não podem ser maiores que leads';
-    if (cliques > impressoes && !isNaN(cliques) && !isNaN(impressoes)) novosErros.cliques = 'Cliques não podem ser maiores que impressões';
-    setErrors(novosErros);
-    return Object.keys(novosErros).length === 0;
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validarFormulario()) {
-      toast({ title: 'Erro de Validação', description: 'Corrija os erros no formulário antes de enviar.', variant: 'destructive' });
-      return;
-    }
+    setLoading(true);
+
     try {
-      setIsSubmitting(true);
       const payload = {
         data_ref: formData.data_ref,
+        produto: formData.produto,
         canal: formData.canal,
-        campanha: formData.campanha.trim(),
+        campanha: formData.campanha,
         investimento: parseFloat(formData.investimento),
-        leads_gerados: parseInt(formData.leads_gerados),
-        conversoes: parseInt(formData.conversoes),
-        receita_gerada: parseFloat(formData.receita_gerada),
-        impressoes: parseInt(formData.impressoes),
-        cliques: parseInt(formData.cliques),
+        impressoes: parseInt(formData.impressoes) || 0,
+        cliques: parseInt(formData.cliques) || 0,
+        leads: parseInt(formData.leads) || 0,
+        vendas: parseInt(formData.vendas) || 0,
+        receita: parseFloat(formData.receita) || 0,
       };
-      await api.post('/marketing/data', payload);
-      toast({ title: 'Sucesso!', description: 'Campanha cadastrada com sucesso.' });
-      router.push('/dashboard/marketing');
+
+      await api.post("/marketing/", payload);
+
+      toast({
+        title: "✅ Sucesso!",
+        description: "Dados de marketing salvos com sucesso.",
+      });
+
+      router.push("/dashboard/marketing");
     } catch (error: any) {
-      console.error('Erro ao salvar:', error);
-      if (error?.status === 409) {
-        toast({ title: 'Registro Duplicado', description: error?.detail || 'Já existe um registro para esta data, canal e campanha.', variant: 'destructive' });
-      } else {
-        toast({ title: 'Erro ao Salvar', description: error?.detail || 'Erro ao cadastrar campanha. Tente novamente.', variant: 'destructive' });
-      }
+      toast({
+        title: "❌ Erro",
+        description: error.response?.data?.detail || "Erro ao salvar dados",
+        variant: "destructive",
+      });
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
   };
 
+  const handleChange = (field: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
   return (
-    <div className="space-y-6 p-6 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Nova Campanha de Marketing</h1>
-          <p className="text-muted-foreground">Cadastre os dados de uma nova campanha</p>
-        </div>
-        <Link href="/dashboard/marketing">
-          <Button variant="outline">Voltar</Button>
-        </Link>
+    <div className="space-y-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">Novo Registro - Marketing</h1>
+        <p className="text-gray-600 mt-1">Preencha os dados da campanha de marketing</p>
       </div>
-      <form onSubmit={handleSubmit}>
-        <Card>
-          <CardHeader>
-            <CardTitle>Dados da Campanha</CardTitle>
-            <CardDescription>Preencha todos os campos com os dados crus (sem fórmulas)</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="data_ref">Data de Referência <span className="text-red-500">*</span></Label>
-              <Input id="data_ref" type="date" value={formData.data_ref} onChange={(e) => handleChange('data_ref', e.target.value)} className={errors.data_ref ? 'border-red-500' : ''} />
-              {errors.data_ref && <p className="text-sm text-red-500 mt-1">{errors.data_ref}</p>}
-            </div>
-            <div>
-              <Label htmlFor="canal">Canal <span className="text-red-500">*</span></Label>
-              <Select value={formData.canal} onValueChange={(value) => handleChange('canal', value)}>
-                <SelectTrigger className={errors.canal ? 'border-red-500' : ''}>
-                  <SelectValue placeholder="Selecione o canal" />
-                </SelectTrigger>
-                <SelectContent>
-                  {CANAIS_MARKETING.map((canal) => (
-                    <SelectItem key={canal} value={canal}>{canal}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.canal && <p className="text-sm text-red-500 mt-1">{errors.canal}</p>}
-            </div>
-            <div>
-              <Label htmlFor="campanha">Nome da Campanha <span className="text-red-500">*</span></Label>
-              <Input id="campanha" type="text" placeholder="Ex: Campanha Black Friday 2025" value={formData.campanha} onChange={(e) => handleChange('campanha', e.target.value)} className={errors.campanha ? 'border-red-500' : ''} />
-              {errors.campanha && <p className="text-sm text-red-500 mt-1">{errors.campanha}</p>}
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="investimento">Investimento (R$) <span className="text-red-500">*</span></Label>
-                <Input id="investimento" type="number" step="0.01" min="0" placeholder="0.00" value={formData.investimento} onChange={(e) => handleChange('investimento', e.target.value)} className={errors.investimento ? 'border-red-500' : ''} />
-                {errors.investimento && <p className="text-sm text-red-500 mt-1">{errors.investimento}</p>}
-              </div>
-              <div>
-                <Label htmlFor="leads_gerados">Leads Gerados <span className="text-red-500">*</span></Label>
-                <Input id="leads_gerados" type="number" min="0" placeholder="0" value={formData.leads_gerados} onChange={(e) => handleChange('leads_gerados', e.target.value)} className={errors.leads_gerados ? 'border-red-500' : ''} />
-                {errors.leads_gerados && <p className="text-sm text-red-500 mt-1">{errors.leads_gerados}</p>}
-              </div>
-              <div>
-                <Label htmlFor="conversoes">Conversões <span className="text-red-500">*</span></Label>
-                <Input id="conversoes" type="number" min="0" placeholder="0" value={formData.conversoes} onChange={(e) => handleChange('conversoes', e.target.value)} className={errors.conversoes ? 'border-red-500' : ''} />
-                {errors.conversoes && <p className="text-sm text-red-500 mt-1">{errors.conversoes}</p>}
-              </div>
-              <div>
-                <Label htmlFor="receita_gerada">Receita Gerada (R$) <span className="text-red-500">*</span></Label>
-                <Input id="receita_gerada" type="number" step="0.01" min="0" placeholder="0.00" value={formData.receita_gerada} onChange={(e) => handleChange('receita_gerada', e.target.value)} className={errors.receita_gerada ? 'border-red-500' : ''} />
-                {errors.receita_gerada && <p className="text-sm text-red-500 mt-1">{errors.receita_gerada}</p>}
-              </div>
-              <div>
-                <Label htmlFor="impressoes">Impressões <span className="text-red-500">*</span></Label>
-                <Input id="impressoes" type="number" min="0" placeholder="0" value={formData.impressoes} onChange={(e) => handleChange('impressoes', e.target.value)} className={errors.impressoes ? 'border-red-500' : ''} />
-                {errors.impressoes && <p className="text-sm text-red-500 mt-1">{errors.impressoes}</p>}
-              </div>
-              <div>
-                <Label htmlFor="cliques">Cliques <span className="text-red-500">*</span></Label>
-                <Input id="cliques" type="number" min="0" placeholder="0" value={formData.cliques} onChange={(e) => handleChange('cliques', e.target.value)} className={errors.cliques ? 'border-red-500' : ''} />
-                {errors.cliques && <p className="text-sm text-red-500 mt-1">{errors.cliques}</p>}
-              </div>
-            </div>
-            <div className="flex gap-4 pt-4">
-              <Button type="submit" disabled={isSubmitting}>{isSubmitting ? 'Salvando...' : 'Salvar Campanha'}</Button>
-              <Link href="/dashboard/marketing">
-                <Button type="button" variant="outline" disabled={isSubmitting}>Cancelar</Button>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
+
+      {/* Formulário Premium */}
+      <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Data de Referência */}
+          <div className="space-y-2">
+            <Label htmlFor="data_ref" className="flex items-center gap-2 text-gray-700 font-medium">
+              <Calendar className="w-4 h-4 text-blue-600" />
+              Data de Referência *
+            </Label>
+            <Input
+              id="data_ref"
+              type="date"
+              value={formData.data_ref}
+              onChange={(e) => handleChange("data_ref", e.target.value)}
+              required
+              className="border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Produto */}
+          <div className="space-y-2">
+            <Label htmlFor="produto" className="flex items-center gap-2 text-gray-700 font-medium">
+              <Package className="w-4 h-4 text-blue-600" />
+              Produto *
+            </Label>
+            <Select value={formData.produto} onValueChange={(value) => handleChange("produto", value)} required>
+              <SelectTrigger className="border-gray-300 focus:border-blue-500 focus:ring-blue-500">
+                <SelectValue placeholder="Selecione o produto" />
+              </SelectTrigger>
+              <SelectContent>
+                {PRODUTOS_OPTIONS.map((produto) => (
+                  <SelectItem key={produto.value} value={produto.value}>
+                    {produto.label} ({produto.kpi})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-gray-500">
+              CPL = Custo por Lead | CPA = Custo por Venda
+            </p>
+          </div>
+
+          {/* Canal */}
+          <div className="space-y-2">
+            <Label htmlFor="canal" className="flex items-center gap-2 text-gray-700 font-medium">
+              <TrendingUp className="w-4 h-4 text-green-600" />
+              Canal *
+            </Label>
+            <Input
+              id="canal"
+              type="text"
+              placeholder="Ex: Google Ads, Facebook, Instagram"
+              value={formData.canal}
+              onChange={(e) => handleChange("canal", e.target.value)}
+              required
+              className="border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Campanha */}
+          <div className="space-y-2">
+            <Label htmlFor="campanha" className="flex items-center gap-2 text-gray-700 font-medium">
+              <TrendingUp className="w-4 h-4 text-green-600" />
+              Campanha *
+            </Label>
+            <Input
+              id="campanha"
+              type="text"
+              placeholder="Ex: Black Friday 2024"
+              value={formData.campanha}
+              onChange={(e) => handleChange("campanha", e.target.value)}
+              required
+              className="border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Investimento */}
+          <div className="space-y-2">
+            <Label htmlFor="investimento" className="flex items-center gap-2 text-gray-700 font-medium">
+              <DollarSign className="w-4 h-4 text-red-600" />
+              Investimento (R$) *
+            </Label>
+            <Input
+              id="investimento"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="0.00"
+              value={formData.investimento}
+              onChange={(e) => handleChange("investimento", e.target.value)}
+              required
+              className="border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Impressões */}
+          <div className="space-y-2">
+            <Label htmlFor="impressoes" className="flex items-center gap-2 text-gray-700 font-medium">
+              <Eye className="w-4 h-4 text-purple-600" />
+              Impressões
+            </Label>
+            <Input
+              id="impressoes"
+              type="number"
+              min="0"
+              placeholder="0"
+              value={formData.impressoes}
+              onChange={(e) => handleChange("impressoes", e.target.value)}
+              className="border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Cliques */}
+          <div className="space-y-2">
+            <Label htmlFor="cliques" className="flex items-center gap-2 text-gray-700 font-medium">
+              <MousePointerClick className="w-4 h-4 text-indigo-600" />
+              Cliques
+            </Label>
+            <Input
+              id="cliques"
+              type="number"
+              min="0"
+              placeholder="0"
+              value={formData.cliques}
+              onChange={(e) => handleChange("cliques", e.target.value)}
+              className="border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Leads */}
+          <div className="space-y-2">
+            <Label htmlFor="leads" className="flex items-center gap-2 text-gray-700 font-medium">
+              <Users className="w-4 h-4 text-blue-600" />
+              Leads
+            </Label>
+            <Input
+              id="leads"
+              type="number"
+              min="0"
+              placeholder="0"
+              value={formData.leads}
+              onChange={(e) => handleChange("leads", e.target.value)}
+              className="border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Vendas */}
+          <div className="space-y-2">
+            <Label htmlFor="vendas" className="flex items-center gap-2 text-gray-700 font-medium">
+              <TrendingUp className="w-4 h-4 text-green-600" />
+              Vendas
+            </Label>
+            <Input
+              id="vendas"
+              type="number"
+              min="0"
+              placeholder="0"
+              value={formData.vendas}
+              onChange={(e) => handleChange("vendas", e.target.value)}
+              className="border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Receita */}
+          <div className="space-y-2">
+            <Label htmlFor="receita" className="flex items-center gap-2 text-gray-700 font-medium">
+              <DollarSign className="w-4 h-4 text-green-600" />
+              Receita (R$)
+            </Label>
+            <Input
+              id="receita"
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="0.00"
+              value={formData.receita}
+              onChange={(e) => handleChange("receita", e.target.value)}
+              className="border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
+        {/* Botões */}
+        <div className="flex gap-4 mt-8 pt-6 border-t border-gray-200">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => router.back()}
+            disabled={loading}
+            className="flex-1"
+          >
+            Cancelar
+          </Button>
+          <Button type="submit" disabled={loading} className="flex-1 bg-blue-600 hover:bg-blue-700">
+            {loading ? "Salvando..." : "Salvar Registro"}
+          </Button>
+        </div>
       </form>
     </div>
   );
