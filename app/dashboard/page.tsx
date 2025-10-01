@@ -36,9 +36,15 @@ export default function DashboardHome() {
   const [user, setUser] = useState<any>(null);
 
   useEffect(() => {
-    const userData = localStorage.getItem("user");
-    if (userData) {
-      setUser(JSON.parse(userData));
+    try {
+      const userData = localStorage.getItem("user");
+      if (userData && userData !== "undefined") {
+        setUser(JSON.parse(userData));
+      }
+    } catch (error) {
+      console.error("Erro ao parsear dados do usuário:", error);
+      // Limpar localStorage corrompido
+      localStorage.removeItem("user");
     }
   }, []);
 
@@ -236,7 +242,6 @@ export default function DashboardHome() {
                     transition={{ duration: 0.2 }}
                   >
                     <Card className="group border-gray-200/50 hover:border-cenat-secondary/50 hover:shadow-xl transition-all duration-300 cursor-pointer relative overflow-hidden">
-                      {/* Barra decorativa */}
                       <div className={`absolute top-0 left-0 right-0 h-1 ${setor.bgColor} opacity-0 group-hover:opacity-100 transition-opacity`} />
                       
                       <CardHeader>
